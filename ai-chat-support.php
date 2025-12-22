@@ -3,7 +3,7 @@
  * Plugin Name: AI Chat Support
  * Plugin URI: https://example.com
  * Description: AI-powered chatbot with Custom Context, History Fix, and Smooth Scroll.
- * Version: 1.1.1
+ * Version: 1.1.3
  * Author: Wajih Shaikh
  * Author URI: https://goaccelovate.com
  * Company: GoAccelovate
@@ -13,7 +13,7 @@
 // Prevent direct access
 if (!defined('ABSPATH')) exit;
 
-define('AI_CHAT_VERSION', '1.1.1');
+define('AI_CHAT_VERSION', '1.1.3');
 define('AI_CHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_CHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -90,35 +90,115 @@ class AI_Chat_Plugin {
     public function admin_page() {
         global $wpdb;
         $chats = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}ai_chats ORDER BY created_at DESC LIMIT 100");
+        $total_chats = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}ai_chats");
+        $latest_time = 'No chats yet';
+        if ($chats && !empty($chats[0]->created_at)) {
+            $latest_time = date_i18n('M j, Y H:i', strtotime($chats[0]->created_at));
+        }
         ?>
-        <div class="wrap">
-            <h1>AI Chat History</h1>
-            <table class="wp-list-table widefat fixed striped">
-                <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Purpose</th><th>Date</th><th>Actions</th></tr></thead>
-                <tbody>
-                    <?php if ($chats): foreach ($chats as $chat): ?>
-                    <tr>
-                        <td><?php echo $chat->id; ?></td>
-                        <td><?php echo esc_html($chat->user_name); ?></td>
-                        <td><?php echo esc_html($chat->user_email); ?></td>
-                        <td><?php echo esc_html($chat->purpose); ?></td>
-                        <td><?php echo date('Y-m-d H:i', strtotime($chat->created_at)); ?></td>
-                        <td>
-                            <button class="button view-chat" data-session="<?php echo esc_attr($chat->session_id); ?>">View</button>
-                            <button class="button delete-chat" data-session="<?php echo esc_attr($chat->session_id); ?>">Delete</button>
-                        </td>
-                    </tr>
-                    <?php endforeach; else: ?>
-                    <tr><td colspan="6">No chats found.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+        <div class="wrap ai-chat-admin">
+            <div class="ai-chat-admin-hero">
+                <div>
+                    <h1>AI Chat History</h1>
+                    <p class="ai-chat-admin-subtitle">Latest 100 conversations with your visitors.</p>
+                </div>
+                <div class="ai-chat-admin-stats">
+                    <div class="ai-chat-admin-stat">
+                        <span class="ai-chat-admin-stat-label">Total chats</span>
+                        <span class="ai-chat-admin-stat-value"><?php echo number_format_i18n($total_chats); ?></span>
+                    </div>
+                    <div class="ai-chat-admin-stat">
+                        <span class="ai-chat-admin-stat-label">Latest chat</span>
+                        <span class="ai-chat-admin-stat-value"><?php echo esc_html($latest_time); ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-chat-card">
+                <div class="ai-chat-card-header">
+                    <div>
+                        <h2>Conversations</h2>
+                        <p class="ai-chat-card-subtitle">Click View to read the full transcript.</p>
+                    </div>
+                </div>
+                <?php if ($chats): ?>
+                    <div class="ai-chat-table-wrap">
+                        <table class="ai-chat-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">User</th>
+                                    <th scope="col">Purpose</th>
+                                    <th scope="col">Date</th>
+                                    <th scope="col">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($chats as $chat): ?>
+                                    <?php
+                                    $user_name = trim($chat->user_name) ? $chat->user_name : 'Guest';
+                                    $user_email = trim($chat->user_email) ? $chat->user_email : 'No email';
+                                    $purpose_label = trim($chat->purpose) ? $chat->purpose : 'General';
+                                    $purpose_slug = sanitize_title($purpose_label);
+                                    $purpose_class = $purpose_slug ? 'ai-chat-purpose-' . $purpose_slug : '';
+                                    $formatted_date = date_i18n('M j, Y H:i', strtotime($chat->created_at));
+                                    ?>
+                                    <tr>
+                                        <td><?php echo (int) $chat->id; ?></td>
+                                        <td>
+                                            <div class="ai-chat-admin-user">
+                                                <div class="ai-chat-admin-name"><?php echo esc_html($user_name); ?></div>
+                                                <div class="ai-chat-admin-email"><?php echo esc_html($user_email); ?></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="ai-chat-purpose <?php echo esc_attr($purpose_class); ?>"><?php echo esc_html($purpose_label); ?></span>
+                                        </td>
+                                        <td><?php echo esc_html($formatted_date); ?></td>
+                                        <td class="ai-chat-actions">
+                                            <button class="button ai-chat-admin-btn ai-chat-admin-btn--ghost view-chat"
+                                                data-session="<?php echo esc_attr($chat->session_id); ?>"
+                                                data-name="<?php echo esc_attr($user_name); ?>"
+                                                data-email="<?php echo esc_attr($user_email); ?>"
+                                                data-purpose="<?php echo esc_attr($purpose_label); ?>"
+                                                data-date="<?php echo esc_attr($formatted_date); ?>">
+                                                View
+                                            </button>
+                                            <button class="button ai-chat-admin-btn ai-chat-admin-btn--danger delete-chat"
+                                                data-session="<?php echo esc_attr($chat->session_id); ?>">
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="ai-chat-empty">
+                        <div class="ai-chat-empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a4 4 0 0 1-4 4H8l-5 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+                                <path d="M8 10h8"></path>
+                                <path d="M8 14h5"></path>
+                            </svg>
+                        </div>
+                        <h3>No chats yet</h3>
+                        <p>Once visitors start chatting, their conversations will appear here.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
-        <div id="chat-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999;">
-            <div style="position:relative; width:80%; max-width:800px; margin:50px auto; background:#fff; padding:20px; border-radius:8px; max-height:80vh; overflow-y:auto;">
-                <span id="close-modal" style="position:absolute; top:10px; right:20px; font-size:28px; cursor:pointer;">&times;</span>
-                <h2>Chat Conversation</h2>
-                <div id="chat-messages-content"></div>
+        <div id="chat-modal" class="ai-chat-admin-modal" aria-hidden="true">
+            <div class="ai-chat-admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="ai-chat-admin-modal-title">
+                <div class="ai-chat-admin-modal-header">
+                    <div>
+                        <h2 id="ai-chat-admin-modal-title">Chat Conversation</h2>
+                        <div class="ai-chat-admin-modal-meta" id="ai-chat-admin-modal-meta"></div>
+                    </div>
+                    <button type="button" id="close-modal" class="ai-chat-admin-close" aria-label="Close">&times;</button>
+                </div>
+                <div id="chat-messages-content" class="ai-chat-admin-thread"></div>
             </div>
         </div>
         <?php
@@ -159,76 +239,111 @@ class AI_Chat_Plugin {
         $badge_subtitle = get_option('ai_chat_badge_subtitle', 'How can we help you?');
         $badge_icon = get_option('ai_chat_badge_icon', '🤖');
         ?>
-        <div class="wrap">
-            <h1>AI Chat Settings</h1>
+        <div class="wrap ai-chat-admin ai-chat-settings">
+            <div class="ai-chat-admin-hero ai-chat-admin-hero--settings">
+                <div>
+                    <h1>AI Chat Settings</h1>
+                    <p class="ai-chat-admin-subtitle">Configure AI behavior, providers, and widget text.</p>
+                </div>
+            </div>
             <form method="post">
                 <?php wp_nonce_field('ai_chat_settings'); ?>
-                
-                <h2>AI Personality & Context</h2>
-                <table class="form-table">
-                    <tr>
-                        <th>Website Context / Instructions</th>
-                        <td>
-                            <textarea name="ai_instruction" rows="6" cols="50" class="large-text code" placeholder="E.g. You are a support agent for a Pizza Shop called Mario's. We are open 9am-10pm. Do not give medical advice."><?php echo esc_textarea($instruction); ?></textarea>
-                            <p class="description">Provide details about your business so the AI knows how to answer. (Shift+Enter for new lines)</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Welcome Message</th>
-                        <td><input type="text" name="welcome_message" value="<?php echo esc_attr($welcome); ?>" class="regular-text"></td>
-                    </tr>
-                </table>
 
-                <h2>API Configuration</h2>
-                <table class="form-table">
-                    <tr>
-                        <th>API Provider</th>
-                        <td>
-                            <select name="api_provider" id="api_provider">
-                                <option value="openai" <?php selected($provider, 'openai'); ?>>OpenAI (ChatGPT)</option>
-                                <option value="gemini" <?php selected($provider, 'gemini'); ?>>Google Gemini</option>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr class="openai-field">
-                        <th>OpenAI API Key</th>
-                        <td><input type="password" name="openai_key" value="<?php echo esc_attr($openai_key); ?>" class="regular-text"></td>
-                    </tr>
-                    <tr class="openai-field">
-                        <th>OpenAI Model</th>
-                        <td>
-                            <select name="model">
-                                <option value="gpt-4" <?php selected($model, 'gpt-4'); ?>>GPT-4</option>
-                                <option value="gpt-3.5-turbo" <?php selected($model, 'gpt-3.5-turbo'); ?>>GPT-3.5 Turbo</option>
-                                <option value="gpt-4o" <?php selected($model, 'gpt-4o'); ?>>GPT-4o</option>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr class="gemini-field">
-                        <th>Gemini API Key</th>
-                        <td>
-                            <input type="password" name="gemini_key" value="<?php echo esc_attr($gemini_key); ?>" class="regular-text">
-                        </td>
-                    </tr>
-                    <tr class="gemini-field">
-                        <th>Gemini Model</th>
-                        <td>
-                            <select name="gemini_model">
-                                <option value="gemini-2.0-flash" <?php selected($gemini_model, 'gemini-2.0-flash'); ?>>Gemini 2.0 Flash (Latest)</option>
-                                <option value="gemini-1.5-flash" <?php selected($gemini_model, 'gemini-1.5-flash'); ?>>Gemini 1.5 Flash</option>
-                                <option value="gemini-1.5-pro" <?php selected($gemini_model, 'gemini-1.5-pro'); ?>>Gemini 1.5 Pro</option>
-                            </select>
-                        </td>
-                    </tr>
-                </table>
-                
-                <h2>Widget Appearance</h2>
-                <table class="form-table">
-                    <tr><th>Badge Title</th><td><input type="text" name="badge_title" value="<?php echo esc_attr($badge_title); ?>" class="regular-text"></td></tr>
-                    <tr><th>Badge Subtitle</th><td><input type="text" name="badge_subtitle" value="<?php echo esc_attr($badge_subtitle); ?>" class="regular-text"></td></tr>
-                    <tr><th>Badge Icon</th><td><input type="text" name="badge_icon" value="<?php echo esc_attr($badge_icon); ?>" style="width:100px;"></td></tr>
-                </table>
-                <p class="submit"><input type="submit" name="ai_chat_save_settings" class="button button-primary" value="Save Settings"></p>
+                <div class="ai-chat-card">
+                    <div class="ai-chat-card-header">
+                        <div>
+                            <h2>AI Personality & Context</h2>
+                            <p class="ai-chat-card-subtitle">Teach the assistant about your business and tone.</p>
+                        </div>
+                    </div>
+                    <div class="ai-chat-card-body">
+                        <table class="form-table ai-chat-form-table">
+                            <tr>
+                                <th>Website Context / Instructions</th>
+                                <td>
+                                    <textarea name="ai_instruction" rows="6" cols="50" class="large-text code" placeholder="E.g. You are a support agent for a Pizza Shop called Mario's. We are open 9am-10pm. Do not give medical advice."><?php echo esc_textarea($instruction); ?></textarea>
+                                    <p class="description">Provide details about your business so the AI knows how to answer. (Shift+Enter for new lines)</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Welcome Message</th>
+                                <td><input type="text" name="welcome_message" value="<?php echo esc_attr($welcome); ?>" class="regular-text"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="ai-chat-card">
+                    <div class="ai-chat-card-header">
+                        <div>
+                            <h2>API Configuration</h2>
+                            <p class="ai-chat-card-subtitle">Select a provider and set your API keys.</p>
+                        </div>
+                    </div>
+                    <div class="ai-chat-card-body">
+                        <table class="form-table ai-chat-form-table">
+                            <tr>
+                                <th>API Provider</th>
+                                <td>
+                                    <select name="api_provider" id="api_provider">
+                                        <option value="openai" <?php selected($provider, 'openai'); ?>>OpenAI (ChatGPT)</option>
+                                        <option value="gemini" <?php selected($provider, 'gemini'); ?>>Google Gemini</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr class="openai-field">
+                                <th>OpenAI API Key</th>
+                                <td><input type="password" name="openai_key" value="<?php echo esc_attr($openai_key); ?>" class="regular-text"></td>
+                            </tr>
+                            <tr class="openai-field">
+                                <th>OpenAI Model</th>
+                                <td>
+                                    <select name="model">
+                                        <option value="gpt-4" <?php selected($model, 'gpt-4'); ?>>GPT-4</option>
+                                        <option value="gpt-3.5-turbo" <?php selected($model, 'gpt-3.5-turbo'); ?>>GPT-3.5 Turbo</option>
+                                        <option value="gpt-4o" <?php selected($model, 'gpt-4o'); ?>>GPT-4o</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr class="gemini-field">
+                                <th>Gemini API Key</th>
+                                <td>
+                                    <input type="password" name="gemini_key" value="<?php echo esc_attr($gemini_key); ?>" class="regular-text">
+                                </td>
+                            </tr>
+                            <tr class="gemini-field">
+                                <th>Gemini Model</th>
+                                <td>
+                                    <select name="gemini_model">
+                                        <option value="gemini-2.0-flash" <?php selected($gemini_model, 'gemini-2.0-flash'); ?>>Gemini 2.0 Flash (Latest)</option>
+                                        <option value="gemini-1.5-flash" <?php selected($gemini_model, 'gemini-1.5-flash'); ?>>Gemini 1.5 Flash</option>
+                                        <option value="gemini-1.5-pro" <?php selected($gemini_model, 'gemini-1.5-pro'); ?>>Gemini 1.5 Pro</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="ai-chat-card">
+                    <div class="ai-chat-card-header">
+                        <div>
+                            <h2>Widget Appearance</h2>
+                            <p class="ai-chat-card-subtitle">Adjust the badge text and icon shown to visitors.</p>
+                        </div>
+                    </div>
+                    <div class="ai-chat-card-body">
+                        <table class="form-table ai-chat-form-table">
+                            <tr><th>Badge Title</th><td><input type="text" name="badge_title" value="<?php echo esc_attr($badge_title); ?>" class="regular-text"></td></tr>
+                            <tr><th>Badge Subtitle</th><td><input type="text" name="badge_subtitle" value="<?php echo esc_attr($badge_subtitle); ?>" class="regular-text"></td></tr>
+                            <tr><th>Badge Icon</th><td><input type="text" name="badge_icon" value="<?php echo esc_attr($badge_icon); ?>" class="regular-text ai-chat-icon-input"></td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="ai-chat-form-actions">
+                    <input type="submit" name="ai_chat_save_settings" class="button button-primary ai-chat-primary-btn" value="Save Settings">
+                </div>
             </form>
         </div>
         <script>
@@ -244,12 +359,19 @@ class AI_Chat_Plugin {
     }
 
     public function admin_scripts($hook) {
-        if ($hook !== 'toplevel_page_ai-chats') return;
-        wp_enqueue_script('ai-chat-admin', AI_CHAT_PLUGIN_URL . 'admin.js', array('jquery'), AI_CHAT_VERSION, true);
-        wp_localize_script('ai-chat-admin', 'aiChatAdmin', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('ai_chat_admin_nonce')
-        ));
+        $is_history = ($hook === 'toplevel_page_ai-chats');
+        $is_settings = ($hook === 'ai-chats_page_ai-chats-settings');
+        if (!$is_history && !$is_settings) return;
+
+        wp_enqueue_style('ai-chat-admin', AI_CHAT_PLUGIN_URL . 'admin.css', array(), AI_CHAT_VERSION);
+
+        if ($is_history) {
+            wp_enqueue_script('ai-chat-admin', AI_CHAT_PLUGIN_URL . 'admin.js', array('jquery'), AI_CHAT_VERSION, true);
+            wp_localize_script('ai-chat-admin', 'aiChatAdmin', array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('ai_chat_admin_nonce')
+            ));
+        }
     }
     
     public function frontend_scripts() {
@@ -282,25 +404,6 @@ class AI_Chat_Plugin {
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>
         </button>
 
-        <div id="ai-chat-modal" role="dialog" aria-modal="true" aria-labelledby="ai-chat-modal-title" style="display:none;">
-            <div class="ai-chat-modal-content">
-                <button type="button" class="ai-chat-close" aria-label="Close">&times;</button>
-                <h2 id="ai-chat-modal-title">Start Chat</h2>
-                <p>Please provide your details.</p>
-                <form id="ai-chat-user-form">
-                    <input type="text" id="chat-name" placeholder="Name" required>
-                    <input type="email" id="chat-email" placeholder="Email" required>
-                    <select id="chat-purpose" required>
-                        <option value="">Select Topic</option>
-                        <option value="Support">Support</option>
-                        <option value="Sales">Sales</option>
-                        <option value="General">General</option>
-                    </select>
-                    <button type="submit">Start Chat</button>
-                </form>
-            </div>
-        </div>
-
         <div id="ai-chat-window" role="region" aria-label="AI chat" style="display:none;">
             <div class="ai-chat-header">
                 <div class="ai-chat-title">
@@ -324,6 +427,35 @@ class AI_Chat_Plugin {
                 </div>
             </div>
             
+            <div id="ai-chat-prechat" class="ai-chat-prechat">
+                <div class="ai-chat-prechat-card">
+                    <div class="ai-chat-prechat-header">
+                        <h3 class="ai-chat-prechat-title">Start Chat</h3>
+                        <p class="ai-chat-prechat-subtitle">Tell us a bit about you to begin.</p>
+                    </div>
+                    <form id="ai-chat-user-form" class="ai-chat-prechat-form">
+                        <label class="ai-chat-field">
+                            <span class="ai-chat-field-label">Name</span>
+                            <input type="text" id="chat-name" placeholder="Your name" autocomplete="name" required>
+                        </label>
+                        <label class="ai-chat-field">
+                            <span class="ai-chat-field-label">Email</span>
+                            <input type="email" id="chat-email" placeholder="you@example.com" autocomplete="email" required>
+                        </label>
+                        <label class="ai-chat-field">
+                            <span class="ai-chat-field-label">Purpose</span>
+                            <select id="chat-purpose" required>
+                                <option value="">Select Topic</option>
+                                <option value="Support">Support</option>
+                                <option value="Sales">Sales</option>
+                                <option value="General">General</option>
+                            </select>
+                        </label>
+                        <button type="submit">Start Chat</button>
+                    </form>
+                </div>
+            </div>
+
             <div id="ai-chat-messages" aria-live="polite"></div>
             
             <div class="ai-chat-input-area">

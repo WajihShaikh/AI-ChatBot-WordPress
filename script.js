@@ -61,9 +61,11 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     sessionId = response.data.session_id;
                     persistSession({ session_id: sessionId, name: name, email: email, purpose: purpose });
-                    $('#ai-chat-modal').fadeOut();
-                    openChatWindow();
-                    setTimeout(() => typeMessage(aiChat.welcome_message), 500);
+                    setPrechatVisible(false);
+                    $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
+                    $('#ai-chat-input').trigger('focus');
+                    scrollToBottom(true);
+                    setTimeout(() => typeMessage(aiChat.welcome_message), 300);
                 } else {
                      alert('Error saving user');
                      $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
@@ -85,20 +87,13 @@ jQuery(document).ready(function($) {
 
     // Close Chat
     $('.ai-chat-close-chat').click(function() {
-        if(confirm('End Chat?')) {
-            clearStoredSession();
-            $('#ai-chat-window').fadeOut();
-            $('#ai-chat-messages').empty();
-            $('#ai-chat-user-form')[0].reset();
-            $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
-            $('#ai-chat-button').delay(300).fadeIn();
-            resetMinimize();
+        if (!sessionId) {
+            resetChatUi();
+            return;
         }
-    });
-
-    $('.ai-chat-close').click(function() { 
-        $('#ai-chat-modal').fadeOut(); 
-        $('#ai-chat-button').fadeIn(); 
+        if(confirm('End Chat?')) {
+            resetChatUi();
+        }
     });
 
     $('#ai-chat-send').click(sendMessage);
@@ -162,30 +157,50 @@ jQuery(document).ready(function($) {
         $('.ai-chat-minimize').removeClass('is-minimized').attr('aria-label', 'Minimize chat');
     }
 
+    function resetChatUi() {
+        clearStoredSession();
+        $('#ai-chat-window').fadeOut();
+        $('#ai-chat-messages').empty();
+        $('#ai-chat-user-form')[0].reset();
+        $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
+        $('#ai-chat-button').delay(300).fadeIn();
+        resetMinimize();
+        setPrechatVisible(true);
+    }
+
+    function setPrechatVisible(visible) {
+        $('#ai-chat-window').toggleClass('show-prechat', visible);
+    }
+
     function openChatOrForm() {
         $('#ai-chat-button').fadeOut(200);
         $('#ai-chat-welcome-badge').fadeOut(200);
         
-        if (sessionId) {
-            openChatWindow();
-            scrollToBottom(true);
-        } else {
-            $('#ai-chat-modal').css('display', 'flex').hide().fadeIn(function() {
-                $('#chat-name').trigger('focus');
-            });
-        }
+        const needsPrechat = !sessionId;
+        setPrechatVisible(needsPrechat);
+        openChatWindow(needsPrechat);
     }
 
-    function openChatWindow() { 
+    function openChatWindow(focusPrechat = false) { 
         resetMinimize();
         $('#ai-chat-window').css('display', 'flex').hide().fadeIn(function() {
-            $('#ai-chat-input').trigger('focus');
+            if (focusPrechat) {
+                $('#chat-name').trigger('focus');
+            } else {
+                $('#ai-chat-input').trigger('focus');
+            }
         });
-        scrollToBottom(true); 
+        if (!focusPrechat) {
+            scrollToBottom(true);
+        }
     }
 
     function sendMessage() {
         if (isTyping) return;
+        if (!sessionId) {
+            setPrechatVisible(true);
+            return;
+        }
         const input = $('#ai-chat-input');
         const message = input.val().trim();
         if (!message) return;
