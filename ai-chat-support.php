@@ -3,7 +3,7 @@
  * Plugin Name: AI Chat Support
  * Plugin URI: https://example.com
  * Description: AI-powered chatbot with Custom Context, History Fix, and Smooth Scroll.
- * Version: 1.1.5
+ * Version: 1.1.6
  * Author: Wajih Shaikh
  * Author URI: https://goaccelovate.com
  * Company: GoAccelovate
@@ -13,7 +13,7 @@
 // Prevent direct access
 if (!defined('ABSPATH')) exit;
 
-define('AI_CHAT_VERSION', '1.1.5');
+define('AI_CHAT_VERSION', '1.1.6');
 define('AI_CHAT_DB_VERSION', '1.1.4');
 define('AI_CHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_CHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -27,6 +27,11 @@ class AI_Chat_Plugin {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'admin_scripts'));
         add_action('init', array($this, 'maybe_create_tables'));
+        add_action('init', array($this, 'register_widget_route'));
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
+        add_action('template_redirect', array($this, 'serve_widget_js'));
+        add_filter('query_vars', array($this, 'register_widget_query_var'));
+        add_filter('rest_pre_serve_request', array($this, 'add_cors_headers'), 10, 4);
         
         add_action('wp_enqueue_scripts', array($this, 'frontend_scripts'));
         add_action('wp_footer', array($this, 'chat_widget'));
@@ -49,6 +54,10 @@ class AI_Chat_Plugin {
     public function activate() {
         $this->create_tables();
         update_option('ai_chat_db_version', AI_CHAT_DB_VERSION);
+        if (!get_option('ai_chat_widget_key')) {
+            add_option('ai_chat_widget_key', wp_generate_password(32, false, false));
+        }
+        flush_rewrite_rules();
         
         // Defaults
         add_option('ai_chat_api_provider', 'gemini');
@@ -57,13 +66,19 @@ class AI_Chat_Plugin {
         add_option('ai_chat_welcome_message', 'Hello! How can I help you today?');
     }
     
-    public function deactivate() {}
+    public function deactivate() {
+        flush_rewrite_rules();
+    }
 
     public function maybe_create_tables() {
         $installed_version = get_option('ai_chat_db_version');
-        if ($installed_version === AI_CHAT_DB_VERSION) return;
-        $this->create_tables();
-        update_option('ai_chat_db_version', AI_CHAT_DB_VERSION);
+        if ($installed_version !== AI_CHAT_DB_VERSION) {
+            $this->create_tables();
+            update_option('ai_chat_db_version', AI_CHAT_DB_VERSION);
+        }
+        if (!get_option('ai_chat_widget_key')) {
+            add_option('ai_chat_widget_key', wp_generate_password(32, false, false));
+        }
     }
 
     private function create_tables() {
@@ -105,11 +120,160 @@ class AI_Chat_Plugin {
         dbDelta($sql2);
         dbDelta($sql3);
     }
+
+    public function register_widget_route() {
+        add_rewrite_rule('^chatbot-widget\\.js$', 'index.php?ai_chat_widget=1', 'top');
+    }
+
+    public function register_widget_query_var($vars) {
+        $vars[] = 'ai_chat_widget';
+        return $vars;
+    }
+
+    public function serve_widget_js() {
+        $requested = (bool) get_query_var('ai_chat_widget');
+        if (!$requested) {
+            $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+            if ($path && preg_match('~/chatbot-widget\\.js$~', $path)) {
+                $requested = true;
+            }
+        }
+        if (!$requested) return;
+
+        $config = array(
+            'restBase' => rest_url('ai-chat/v1'),
+            'siteUrl' => home_url(),
+            'cssUrl' => AI_CHAT_PLUGIN_URL . 'style.css',
+            'badgeTitle' => get_option('ai_chat_badge_title', 'Welcome to AI Assistant'),
+            'badgeSubtitle' => get_option('ai_chat_badge_subtitle', 'How can we help you?'),
+            'badgeIcon' => get_option('ai_chat_badge_icon', '🤖'),
+            'welcomeMessage' => get_option('ai_chat_welcome_message', 'Hello! How can I help you today?'),
+            'widgetTitle' => 'AI Support'
+        );
+
+        header('Content-Type: application/javascript; charset=UTF-8');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo 'window.AIChatWidgetConfig = ' . wp_json_encode($config) . ';' . "\n";
+        $widget_path = AI_CHAT_PLUGIN_DIR . 'chatbot-widget.js';
+        if (file_exists($widget_path)) {
+            readfile($widget_path);
+        } else {
+            echo "console.error('AI Chat widget file missing.');";
+        }
+        exit;
+    }
+
+    public function register_rest_routes() {
+        register_rest_route('ai-chat/v1', '/session', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'rest_create_session'),
+            'permission_callback' => '__return_true',
+        ));
+
+        register_rest_route('ai-chat/v1', '/message', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'rest_send_message'),
+            'permission_callback' => '__return_true',
+        ));
+    }
+
+    public function add_cors_headers($served, $result, $request, $server) {
+        $route = $request->get_route();
+        if (strpos($route, '/ai-chat/v1/') === 0) {
+            header('Access-Control-Allow-Origin: *');
+            header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type, X-AI-CHAT-KEY');
+        }
+        return $served;
+    }
+
+    private function validate_widget_key($request) {
+        $stored_key = get_option('ai_chat_widget_key', '');
+        if ($stored_key === '') return true;
+        $key = $request->get_param('key');
+        if (!$key) {
+            $key = $request->get_header('x-ai-chat-key');
+        }
+        if (!$key || !hash_equals($stored_key, $key)) {
+            return new WP_Error('ai_chat_invalid_key', 'Invalid widget key.', array('status' => 403));
+        }
+        return true;
+    }
+
+    public function rest_create_session($request) {
+        $key_check = $this->validate_widget_key($request);
+        if (is_wp_error($key_check)) return $key_check;
+
+        global $wpdb;
+        $name = sanitize_text_field($request->get_param('name'));
+        $email = sanitize_email($request->get_param('email'));
+        $purpose = sanitize_text_field($request->get_param('purpose'));
+
+        if (empty($name) || empty($email) || empty($purpose)) {
+            return new WP_Error('ai_chat_missing_fields', 'Name, email, and purpose are required.', array('status' => 400));
+        }
+
+        $session_id = uniqid('chat_', true);
+        $wpdb->insert($wpdb->prefix . 'ai_chats', array(
+            'session_id' => $session_id,
+            'user_name' => $name,
+            'user_email' => $email,
+            'purpose' => $purpose
+        ));
+
+        return rest_ensure_response(array('session_id' => $session_id));
+    }
+
+    public function rest_send_message($request) {
+        $key_check = $this->validate_widget_key($request);
+        if (is_wp_error($key_check)) return $key_check;
+
+        $session_id = sanitize_text_field($request->get_param('session_id'));
+        $message = sanitize_textarea_field($request->get_param('message'));
+
+        if (empty($session_id) || $message === '') {
+            return new WP_Error('ai_chat_missing_fields', 'Session ID and message are required.', array('status' => 400));
+        }
+
+        $response = $this->process_message($session_id, $message);
+        if (is_wp_error($response)) return $response;
+        return rest_ensure_response(array('response' => $response));
+    }
+
+    private function process_message($session_id, $message) {
+        global $wpdb;
+
+        $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array(
+            'session_id' => $session_id,
+            'role' => 'user',
+            'message' => $message
+        ));
+
+        $exact_reply = $this->get_exact_reply($message);
+        if ($exact_reply !== null) {
+            $ai_response = $exact_reply;
+        } else {
+            $provider = get_option('ai_chat_api_provider', 'openai');
+            $ai_response = ($provider === 'openai') ? $this->get_openai_response($session_id) : $this->get_gemini_response($session_id);
+        }
+
+        $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array(
+            'session_id' => $session_id,
+            'role' => 'assistant',
+            'message' => $ai_response
+        ));
+
+        return $ai_response;
+    }
     
     public function add_admin_menu() {
         add_menu_page('AI Chats', 'AI Chats', 'manage_options', 'ai-chats', array($this, 'admin_page'), 'dashicons-format-chat', 30);
         add_submenu_page('ai-chats', 'Settings', 'Settings', 'manage_options', 'ai-chats-settings', array($this, 'settings_page'));
         add_submenu_page('ai-chats', 'Exact Replies', 'Exact Replies', 'manage_options', 'ai-chats-replies', array($this, 'exact_replies_page'));
+        add_submenu_page('ai-chats', 'Embed Code', 'Embed Code', 'manage_options', 'ai-chats-embed', array($this, 'embed_page'));
     }
     
     public function admin_page() {
@@ -574,11 +738,69 @@ class AI_Chat_Plugin {
         <?php
     }
 
+    public function embed_page() {
+        if (!current_user_can('manage_options')) return;
+
+        $notice = '';
+        if (isset($_POST['ai_chat_regen_widget_key'])) {
+            check_admin_referer('ai_chat_regen_widget_key');
+            $new_key = wp_generate_password(32, false, false);
+            update_option('ai_chat_widget_key', $new_key);
+            $notice = 'Widget key regenerated.';
+        }
+
+        $key = get_option('ai_chat_widget_key', '');
+        if ($key === '') {
+            $key = wp_generate_password(32, false, false);
+            update_option('ai_chat_widget_key', $key);
+        }
+
+        $script_src = home_url('/chatbot-widget.js?key=' . rawurlencode($key));
+        $embed_code = '<script src="' . esc_url($script_src) . '"></script>';
+        ?>
+        <div class="wrap ai-chat-admin ai-chat-embed">
+            <div class="ai-chat-admin-hero ai-chat-admin-hero--settings">
+                <div>
+                    <h1>Embed Code</h1>
+                    <p class="ai-chat-admin-subtitle">Add the chatbot to any external site with a single script tag.</p>
+                </div>
+            </div>
+
+            <?php if ($notice): ?>
+                <div class="notice notice-success is-dismissible"><p><?php echo esc_html($notice); ?></p></div>
+            <?php endif; ?>
+
+            <div class="ai-chat-card">
+                <div class="ai-chat-card-header">
+                    <div>
+                        <h2>Script Tag</h2>
+                        <p class="ai-chat-card-subtitle">Paste this just before the closing &lt;/body&gt; tag.</p>
+                    </div>
+                </div>
+                <div class="ai-chat-card-body">
+                    <label class="ai-chat-admin-field">
+                        <span class="ai-chat-admin-field-label">Embed Script</span>
+                        <textarea class="ai-chat-admin-textarea ai-chat-embed-code" rows="3" readonly><?php echo esc_textarea($embed_code); ?></textarea>
+                    </label>
+                    <div class="ai-chat-embed-actions">
+                        <form method="post">
+                            <?php wp_nonce_field('ai_chat_regen_widget_key'); ?>
+                            <button type="submit" name="ai_chat_regen_widget_key" class="button ai-chat-admin-btn ai-chat-admin-btn--ghost">Regenerate Key</button>
+                        </form>
+                    </div>
+                    <p class="description">Use this exact script tag on any site (HTML, Shopify, Wix, etc.). Keep your key private.</p>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
     public function admin_scripts($hook) {
         $is_history = ($hook === 'toplevel_page_ai-chats');
         $is_settings = ($hook === 'ai-chats_page_ai-chats-settings');
         $is_replies = ($hook === 'ai-chats_page_ai-chats-replies');
-        if (!$is_history && !$is_settings && !$is_replies) return;
+        $is_embed = ($hook === 'ai-chats_page_ai-chats-embed');
+        if (!$is_history && !$is_settings && !$is_replies && !$is_embed) return;
 
         wp_enqueue_style('ai-chat-admin', AI_CHAT_PLUGIN_URL . 'admin.css', array(), AI_CHAT_VERSION);
 
@@ -730,22 +952,10 @@ class AI_Chat_Plugin {
     // Send Message
     public function send_message() {
         check_ajax_referer('ai_chat_nonce', 'nonce');
-        global $wpdb;
         $session_id = sanitize_text_field($_POST['session_id']);
         // Use textarea field to allow newlines
         $message = sanitize_textarea_field($_POST['message']);
-        
-        $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array('session_id' => $session_id, 'role' => 'user', 'message' => $message));
-        
-        $exact_reply = $this->get_exact_reply($message);
-        if ($exact_reply !== null) {
-            $ai_response = $exact_reply;
-        } else {
-            $provider = get_option('ai_chat_api_provider', 'openai');
-            $ai_response = ($provider === 'openai') ? $this->get_openai_response($session_id) : $this->get_gemini_response($session_id);
-        }
-        
-        $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array('session_id' => $session_id, 'role' => 'assistant', 'message' => $ai_response));
+        $ai_response = $this->process_message($session_id, $message);
         wp_send_json_success(array('response' => $ai_response));
     }
 
