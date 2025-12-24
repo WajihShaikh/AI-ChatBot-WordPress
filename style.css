@@ -1,5 +1,5 @@
 /* ============================================
-   PREMIUM AI CHAT - VERSION 1.1.3 (THEME PROOF)
+   PREMIUM AI CHAT - VERSION 1.1.5 (THEME PROOF)
    ============================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
@@ -394,17 +394,31 @@
 
 /* Emoji Picker */
 #ai-chat-emoji-picker {
-    display: none; position: absolute; bottom: 70px; left: 12px;
-    width: 280px !important; height: 240px !important; background: white;
-    border: 1px solid var(--ai-chat-border); border-radius: 16px; box-shadow: var(--ai-chat-shadow-soft);
-    padding: 10px !important; overflow-y: auto; z-index: 99999;
-    grid-template-columns: repeat(8, 1fr) !important; gap: 6px !important;
+    display: none;
+    position: absolute;
+    bottom: 72px;
+    left: 12px;
+    width: 300px !important;
+    max-height: 260px !important;
+    background: #ffffff;
+    border: 1px solid var(--ai-chat-border);
+    border-radius: 18px;
+    box-shadow: var(--ai-chat-shadow-soft);
+    padding: 12px !important;
+    overflow: auto;
+    overscroll-behavior: contain;
+    z-index: 99999;
+    grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    align-content: start;
+    scrollbar-width: none;
 }
+#ai-chat-emoji-picker::-webkit-scrollbar { width: 0; height: 0; }
 #ai-chat-emoji-picker.show-picker { display: grid !important; animation: ai-pop 0.18s ease; }
 .emoji-item {
     background: transparent !important; border: none !important; cursor: pointer !important;
     font-size: 18px !important; display: flex !important; align-items: center !important; justify-content: center !important;
-    border-radius: 8px !important; height: 30px;
+    border-radius: 10px !important; width: 30px; height: 30px; line-height: 1;
     transition: background 0.2s ease, transform 0.2s ease;
 }
 .emoji-item:hover { background: var(--ai-chat-surface-2) !important; transform: translateY(-1px); }
@@ -441,7 +455,14 @@
 @media (max-width: 640px) {
     #ai-chat-window { width: 100%; height: 100%; bottom: 0; right: 0; border-radius: 0; max-width: none; max-height: none; }
     #ai-chat-window.is-minimized { width: calc(100% - 32px); height: 68px; right: 16px; bottom: 16px; border-radius: 16px; }
-    #ai-chat-emoji-picker { width: calc(100% - 24px) !important; left: 12px; bottom: 72px; }
+    #ai-chat-emoji-picker {
+        width: auto !important;
+        left: 12px;
+        right: 12px;
+        bottom: 78px;
+        max-height: 45vh !important;
+        grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
+    }
     #ai-chat-button { bottom: 16px; right: 16px; }
     #ai-chat-welcome-badge { right: 16px; left: 16px; bottom: 90px; }
 }

@@ -3,7 +3,7 @@
  * Plugin Name: AI Chat Support
  * Plugin URI: https://example.com
  * Description: AI-powered chatbot with Custom Context, History Fix, and Smooth Scroll.
- * Version: 1.1.3
+ * Version: 1.1.5
  * Author: Wajih Shaikh
  * Author URI: https://goaccelovate.com
  * Company: GoAccelovate
@@ -13,7 +13,8 @@
 // Prevent direct access
 if (!defined('ABSPATH')) exit;
 
-define('AI_CHAT_VERSION', '1.1.3');
+define('AI_CHAT_VERSION', '1.1.5');
+define('AI_CHAT_DB_VERSION', '1.1.4');
 define('AI_CHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_CHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -25,6 +26,7 @@ class AI_Chat_Plugin {
         
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'admin_scripts'));
+        add_action('init', array($this, 'maybe_create_tables'));
         
         add_action('wp_enqueue_scripts', array($this, 'frontend_scripts'));
         add_action('wp_footer', array($this, 'chat_widget'));
@@ -45,9 +47,29 @@ class AI_Chat_Plugin {
     }
     
     public function activate() {
+        $this->create_tables();
+        update_option('ai_chat_db_version', AI_CHAT_DB_VERSION);
+        
+        // Defaults
+        add_option('ai_chat_api_provider', 'gemini');
+        add_option('ai_chat_model', 'gpt-4');
+        add_option('ai_chat_gemini_model', 'gemini-1.5-flash');
+        add_option('ai_chat_welcome_message', 'Hello! How can I help you today?');
+    }
+    
+    public function deactivate() {}
+
+    public function maybe_create_tables() {
+        $installed_version = get_option('ai_chat_db_version');
+        if ($installed_version === AI_CHAT_DB_VERSION) return;
+        $this->create_tables();
+        update_option('ai_chat_db_version', AI_CHAT_DB_VERSION);
+    }
+
+    private function create_tables() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
-        
+
         $sql1 = "CREATE TABLE {$wpdb->prefix}ai_chats (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             session_id varchar(255) NOT NULL,
@@ -58,7 +80,7 @@ class AI_Chat_Plugin {
             PRIMARY KEY (id),
             KEY session_id (session_id)
         ) $charset_collate;";
-        
+
         $sql2 = "CREATE TABLE {$wpdb->prefix}ai_chat_messages (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             session_id varchar(255) NOT NULL,
@@ -68,23 +90,26 @@ class AI_Chat_Plugin {
             PRIMARY KEY (id),
             KEY session_id (session_id)
         ) $charset_collate;";
-        
+
+        $sql3 = "CREATE TABLE {$wpdb->prefix}ai_chat_exact_replies (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            question text NOT NULL,
+            answer text NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY question (question(191))
+        ) $charset_collate;";
+
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql1);
         dbDelta($sql2);
-        
-        // Defaults
-        add_option('ai_chat_api_provider', 'gemini');
-        add_option('ai_chat_model', 'gpt-4');
-        add_option('ai_chat_gemini_model', 'gemini-1.5-flash');
-        add_option('ai_chat_welcome_message', 'Hello! How can I help you today?');
+        dbDelta($sql3);
     }
-    
-    public function deactivate() {}
     
     public function add_admin_menu() {
         add_menu_page('AI Chats', 'AI Chats', 'manage_options', 'ai-chats', array($this, 'admin_page'), 'dashicons-format-chat', 30);
         add_submenu_page('ai-chats', 'Settings', 'Settings', 'manage_options', 'ai-chats-settings', array($this, 'settings_page'));
+        add_submenu_page('ai-chats', 'Exact Replies', 'Exact Replies', 'manage_options', 'ai-chats-replies', array($this, 'exact_replies_page'));
     }
     
     public function admin_page() {
@@ -358,10 +383,202 @@ class AI_Chat_Plugin {
         <?php
     }
 
+    public function exact_replies_page() {
+        if (!current_user_can('manage_options')) return;
+        global $wpdb;
+        $table = $wpdb->prefix . 'ai_chat_exact_replies';
+
+        $notice = '';
+        $notice_type = 'success';
+
+        if (isset($_GET['delete'])) {
+            $delete_id = absint($_GET['delete']);
+            if ($delete_id) {
+                check_admin_referer('ai_chat_delete_reply_' . $delete_id);
+                $wpdb->delete($table, array('id' => $delete_id));
+                $notice = 'Exact reply deleted.';
+            }
+        }
+
+        $edit_id = isset($_GET['edit']) ? absint($_GET['edit']) : 0;
+        $editing = false;
+        $edit_question = '';
+        $edit_answer = '';
+
+        if ($edit_id) {
+            $edit_row = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $edit_id));
+            if ($edit_row) {
+                $editing = true;
+                $edit_question = $edit_row->question;
+                $edit_answer = $edit_row->answer;
+            } else {
+                $edit_id = 0;
+            }
+        }
+
+        if (isset($_POST['ai_chat_save_reply'])) {
+            check_admin_referer('ai_chat_save_reply');
+            $question = isset($_POST['ai_chat_question']) ? wp_unslash($_POST['ai_chat_question']) : '';
+            $answer = isset($_POST['ai_chat_answer']) ? wp_unslash($_POST['ai_chat_answer']) : '';
+            $question = trim(str_replace(array("\r\n", "\r"), "\n", $question));
+            $answer = str_replace(array("\r\n", "\r"), "\n", $answer);
+            $reply_id = isset($_POST['reply_id']) ? absint($_POST['reply_id']) : 0;
+
+            if ($question === '' || trim($answer) === '') {
+                $notice = 'Please enter both a question and an answer.';
+                $notice_type = 'error';
+            } else {
+                if ($reply_id) {
+                    $wpdb->update(
+                        $table,
+                        array('question' => $question, 'answer' => $answer),
+                        array('id' => $reply_id)
+                    );
+                    $notice = 'Exact reply updated.';
+                    $editing = false;
+                    $edit_id = 0;
+                    $edit_question = '';
+                    $edit_answer = '';
+                } else {
+                    $existing_id = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE question = %s LIMIT 1", $question));
+                    if ($existing_id) {
+                        $wpdb->update(
+                            $table,
+                            array('question' => $question, 'answer' => $answer),
+                            array('id' => $existing_id)
+                        );
+                        $notice = 'Existing reply updated for that question.';
+                    } else {
+                        $wpdb->insert(
+                            $table,
+                            array('question' => $question, 'answer' => $answer)
+                        );
+                        $notice = 'Exact reply added.';
+                    }
+                }
+                $edit_question = '';
+                $edit_answer = '';
+            }
+        }
+
+        $replies = $wpdb->get_results("SELECT * FROM {$table} ORDER BY created_at DESC");
+        $form_title = $editing ? 'Edit Exact Reply' : 'Add Exact Reply';
+        $submit_label = $editing ? 'Update Reply' : 'Save Reply';
+        $cancel_url = admin_url('admin.php?page=ai-chats-replies');
+        ?>
+        <div class="wrap ai-chat-admin ai-chat-replies">
+            <div class="ai-chat-admin-hero ai-chat-admin-hero--settings">
+                <div>
+                    <h1>Exact Replies</h1>
+                    <p class="ai-chat-admin-subtitle">Return custom answers for exact matching questions.</p>
+                </div>
+            </div>
+
+            <?php if ($notice): ?>
+                <div class="notice notice-<?php echo esc_attr($notice_type); ?> is-dismissible"><p><?php echo esc_html($notice); ?></p></div>
+            <?php endif; ?>
+
+            <form method="post" class="ai-chat-replies-form">
+                <?php wp_nonce_field('ai_chat_save_reply'); ?>
+                <input type="hidden" name="reply_id" value="<?php echo esc_attr($edit_id); ?>">
+
+                <div class="ai-chat-card">
+                    <div class="ai-chat-card-header">
+                        <div>
+                            <h2><?php echo esc_html($form_title); ?></h2>
+                            <p class="ai-chat-card-subtitle">Questions must match exactly (case sensitive).</p>
+                        </div>
+                    </div>
+                    <div class="ai-chat-card-body">
+                        <div class="ai-chat-reply-grid">
+                            <label class="ai-chat-admin-field">
+                                <span class="ai-chat-admin-field-label">Exact Question</span>
+                                <textarea name="ai_chat_question" rows="4" class="ai-chat-admin-textarea" placeholder="Type the exact user question" required><?php echo esc_textarea($edit_question); ?></textarea>
+                            </label>
+                            <label class="ai-chat-admin-field">
+                                <span class="ai-chat-admin-field-label">Exact Answer</span>
+                                <textarea name="ai_chat_answer" rows="6" class="ai-chat-admin-textarea" placeholder="Type the exact AI reply" required><?php echo esc_textarea($edit_answer); ?></textarea>
+                            </label>
+                        </div>
+                        <div class="ai-chat-form-actions">
+                            <input type="submit" name="ai_chat_save_reply" class="button button-primary ai-chat-primary-btn" value="<?php echo esc_attr($submit_label); ?>">
+                            <?php if ($editing): ?>
+                                <a href="<?php echo esc_url($cancel_url); ?>" class="button ai-chat-admin-btn ai-chat-admin-btn--ghost">Cancel</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="ai-chat-card">
+                <div class="ai-chat-card-header">
+                    <div>
+                        <h2>Saved Replies</h2>
+                        <p class="ai-chat-card-subtitle">These answers will be returned exactly as stored.</p>
+                    </div>
+                </div>
+                <?php if ($replies): ?>
+                    <div class="ai-chat-table-wrap">
+                        <table class="ai-chat-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Question</th>
+                                    <th scope="col">Answer</th>
+                                    <th scope="col">Created</th>
+                                    <th scope="col">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($replies as $reply): ?>
+                                    <?php
+                                    $edit_url = add_query_arg(
+                                        array('page' => 'ai-chats-replies', 'edit' => (int) $reply->id),
+                                        admin_url('admin.php')
+                                    );
+                                    $delete_url = wp_nonce_url(
+                                        add_query_arg(
+                                            array('page' => 'ai-chats-replies', 'delete' => (int) $reply->id),
+                                            admin_url('admin.php')
+                                        ),
+                                        'ai_chat_delete_reply_' . (int) $reply->id
+                                    );
+                                    ?>
+                                    <tr>
+                                        <td><div class="ai-chat-reply-text"><?php echo esc_html($reply->question); ?></div></td>
+                                        <td><div class="ai-chat-reply-text"><?php echo esc_html($reply->answer); ?></div></td>
+                                        <td><?php echo esc_html(date_i18n('M j, Y', strtotime($reply->created_at))); ?></td>
+                                        <td class="ai-chat-actions">
+                                            <a class="button ai-chat-admin-btn ai-chat-admin-btn--ghost" href="<?php echo esc_url($edit_url); ?>">Edit</a>
+                                            <a class="button ai-chat-admin-btn ai-chat-admin-btn--danger" href="<?php echo esc_url($delete_url); ?>" onclick="return confirm('Delete this exact reply?');">Delete</a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="ai-chat-empty">
+                        <div class="ai-chat-empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a4 4 0 0 1-4 4H8l-5 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+                                <path d="M8 10h8"></path>
+                                <path d="M8 14h5"></path>
+                            </svg>
+                        </div>
+                        <h3>No exact replies yet</h3>
+                        <p>Add your first question and answer above.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php
+    }
+
     public function admin_scripts($hook) {
         $is_history = ($hook === 'toplevel_page_ai-chats');
         $is_settings = ($hook === 'ai-chats_page_ai-chats-settings');
-        if (!$is_history && !$is_settings) return;
+        $is_replies = ($hook === 'ai-chats_page_ai-chats-replies');
+        if (!$is_history && !$is_settings && !$is_replies) return;
 
         wp_enqueue_style('ai-chat-admin', AI_CHAT_PLUGIN_URL . 'admin.css', array(), AI_CHAT_VERSION);
 
@@ -520,11 +737,26 @@ class AI_Chat_Plugin {
         
         $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array('session_id' => $session_id, 'role' => 'user', 'message' => $message));
         
-        $provider = get_option('ai_chat_api_provider', 'openai');
-        $ai_response = ($provider === 'openai') ? $this->get_openai_response($session_id) : $this->get_gemini_response($session_id);
+        $exact_reply = $this->get_exact_reply($message);
+        if ($exact_reply !== null) {
+            $ai_response = $exact_reply;
+        } else {
+            $provider = get_option('ai_chat_api_provider', 'openai');
+            $ai_response = ($provider === 'openai') ? $this->get_openai_response($session_id) : $this->get_gemini_response($session_id);
+        }
         
         $wpdb->insert($wpdb->prefix . 'ai_chat_messages', array('session_id' => $session_id, 'role' => 'assistant', 'message' => $ai_response));
         wp_send_json_success(array('response' => $ai_response));
+    }
+
+    private function get_exact_reply($message) {
+        global $wpdb;
+        $question = trim(str_replace(array("\r\n", "\r"), "\n", $message));
+        if ($question === '') return null;
+        $table = $wpdb->prefix . 'ai_chat_exact_replies';
+        $reply = $wpdb->get_var($wpdb->prepare("SELECT answer FROM {$table} WHERE question = %s ORDER BY id DESC LIMIT 1", $question));
+        if ($reply === null) return null;
+        return $reply;
     }
     
     private function get_openai_response($session_id) {
