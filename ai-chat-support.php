@@ -148,7 +148,7 @@ class AI_Chat_Plugin {
             'badgeSubtitle' => get_option('ai_chat_badge_subtitle', 'How can we help you?'),
             'badgeIcon' => get_option('ai_chat_badge_icon', '🤖'),
             'welcomeMessage' => get_option('ai_chat_welcome_message', 'Hello! How can I help you today?'),
-            'widgetTitle' => 'AI Support'
+            'widgetTitle' => 'AI Chat Support'
         );
 
         header('Content-Type: application/javascript; charset=UTF-8');
@@ -210,10 +210,13 @@ class AI_Chat_Plugin {
         global $wpdb;
         $name = sanitize_text_field($request->get_param('name'));
         $email = sanitize_email($request->get_param('email'));
-        $purpose = sanitize_text_field($request->get_param('purpose'));
+        $phone = sanitize_text_field($request->get_param('phone'));
+        if ($phone === '') {
+            $phone = sanitize_text_field($request->get_param('purpose'));
+        }
 
-        if (empty($name) || empty($email) || empty($purpose)) {
-            return new WP_Error('ai_chat_missing_fields', 'Name, email, and purpose are required.', array('status' => 400));
+        if (empty($name) || empty($email)) {
+            return new WP_Error('ai_chat_missing_fields', 'Name and email are required.', array('status' => 400));
         }
 
         $session_id = uniqid('chat_', true);
@@ -221,7 +224,7 @@ class AI_Chat_Plugin {
             'session_id' => $session_id,
             'user_name' => $name,
             'user_email' => $email,
-            'purpose' => $purpose
+            'purpose' => $phone
         ));
 
         return rest_ensure_response(array('session_id' => $session_id));
@@ -317,7 +320,7 @@ class AI_Chat_Plugin {
                                 <tr>
                                     <th scope="col">ID</th>
                                     <th scope="col">User</th>
-                                    <th scope="col">Purpose</th>
+                                    <th scope="col">Phone</th>
                                     <th scope="col">Date</th>
                                     <th scope="col">Actions</th>
                                 </tr>
@@ -327,9 +330,7 @@ class AI_Chat_Plugin {
                                     <?php
                                     $user_name = trim($chat->user_name) ? $chat->user_name : 'Guest';
                                     $user_email = trim($chat->user_email) ? $chat->user_email : 'No email';
-                                    $purpose_label = trim($chat->purpose) ? $chat->purpose : 'General';
-                                    $purpose_slug = sanitize_title($purpose_label);
-                                    $purpose_class = $purpose_slug ? 'ai-chat-purpose-' . $purpose_slug : '';
+                                    $phone_label = trim($chat->purpose) ? $chat->purpose : 'Not provided';
                                     $formatted_date = date_i18n('M j, Y H:i', strtotime($chat->created_at));
                                     ?>
                                     <tr>
@@ -341,7 +342,7 @@ class AI_Chat_Plugin {
                                             </div>
                                         </td>
                                         <td>
-                                            <span class="ai-chat-purpose <?php echo esc_attr($purpose_class); ?>"><?php echo esc_html($purpose_label); ?></span>
+                                            <span class="ai-chat-purpose"><?php echo esc_html($phone_label); ?></span>
                                         </td>
                                         <td><?php echo esc_html($formatted_date); ?></td>
                                         <td class="ai-chat-actions">
@@ -349,7 +350,7 @@ class AI_Chat_Plugin {
                                                 data-session="<?php echo esc_attr($chat->session_id); ?>"
                                                 data-name="<?php echo esc_attr($user_name); ?>"
                                                 data-email="<?php echo esc_attr($user_email); ?>"
-                                                data-purpose="<?php echo esc_attr($purpose_label); ?>"
+                                                data-phone="<?php echo esc_attr($phone_label); ?>"
                                                 data-date="<?php echo esc_attr($formatted_date); ?>">
                                                 View
                                             </button>
@@ -843,14 +844,13 @@ class AI_Chat_Plugin {
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>
         </button>
 
-        <div id="ai-chat-window" role="region" aria-label="AI chat" style="display:none;">
+        <div id="ai-chat-window" class="show-prechat" role="region" aria-label="AI chat" style="display:none;">
             <div class="ai-chat-header">
                 <div class="ai-chat-title">
-                    <span class="status-dot" aria-hidden="true"></span>
-                    <div class="ai-chat-title-text">
-                        <span class="ai-chat-title-name">AI Support</span>
-                        <span class="ai-chat-title-status">Online</span>
-                    </div>
+                        <div class="ai-chat-title-text">
+                            <span class="ai-chat-title-name">AI Chat Support</span>
+                            <span class="ai-chat-title-status">Online</span>
+                        </div>
                 </div>
                 <div class="ai-chat-controls">
                     <button type="button" class="ai-chat-control ai-chat-minimize" aria-label="Minimize chat">
@@ -882,13 +882,8 @@ class AI_Chat_Plugin {
                             <input type="email" id="chat-email" placeholder="you@example.com" autocomplete="email" required>
                         </label>
                         <label class="ai-chat-field">
-                            <span class="ai-chat-field-label">Purpose</span>
-                            <select id="chat-purpose" required>
-                                <option value="">Select Topic</option>
-                                <option value="Support">Support</option>
-                                <option value="Sales">Sales</option>
-                                <option value="General">General</option>
-                            </select>
+                            <span class="ai-chat-field-label">Phone Number</span>
+                            <input type="tel" id="chat-phone" placeholder="Phone number (optional)" autocomplete="tel" inputmode="tel">
                         </label>
                         <button type="submit">Start Chat</button>
                     </form>
@@ -909,7 +904,7 @@ class AI_Chat_Plugin {
                         </svg>
                     </button>
                 </div>
-                <input type="text" id="ai-chat-input" placeholder="Type a message..." autocomplete="off" aria-label="Message">
+                <textarea id="ai-chat-input" rows="1" placeholder="Type a message..." autocomplete="off" aria-label="Message"></textarea>
                 <div class="ai-chat-right-actions">
                     <button type="button" id="ai-chat-voice-toggle" class="icon-btn voice" title="Voice Input" aria-label="Voice input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
@@ -929,9 +924,14 @@ class AI_Chat_Plugin {
         global $wpdb;
         $name = sanitize_text_field($_POST['name']);
         $email = sanitize_email($_POST['email']);
-        $purpose = sanitize_text_field($_POST['purpose']);
+        $phone = '';
+        if (isset($_POST['phone'])) {
+            $phone = sanitize_text_field($_POST['phone']);
+        } elseif (isset($_POST['purpose'])) {
+            $phone = sanitize_text_field($_POST['purpose']);
+        }
         $session_id = uniqid('chat_', true);
-        $wpdb->insert($wpdb->prefix . 'ai_chats', array('session_id' => $session_id, 'user_name' => $name, 'user_email' => $email, 'purpose' => $purpose));
+        $wpdb->insert($wpdb->prefix . 'ai_chats', array('session_id' => $session_id, 'user_name' => $name, 'user_email' => $email, 'purpose' => $phone));
         wp_send_json_success(array('session_id' => $session_id));
     }
 

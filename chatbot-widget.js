@@ -54,7 +54,7 @@
         var badgeSubtitle = config.badgeSubtitle || 'How can we help you?';
         var badgeIcon = config.badgeIcon || 'AI';
         var welcomeMessage = config.welcomeMessage || '';
-        var widgetTitle = config.widgetTitle || 'AI Support';
+        var widgetTitle = config.widgetTitle || 'AI Chat Support';
 
         if (document.getElementById('ai-chat-external-root')) return;
 
@@ -96,10 +96,9 @@
             '<button id="ai-chat-button" type="button" aria-label="Open chat">',
             '  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>',
             '</button>',
-            '<div id="ai-chat-window" role="region" aria-label="AI chat" style="display:none;">',
+            '<div id="ai-chat-window" class="show-prechat" role="region" aria-label="AI chat" style="display:none;">',
             '  <div class="ai-chat-header">',
             '    <div class="ai-chat-title">',
-            '      <span class="status-dot" aria-hidden="true"></span>',
             '      <div class="ai-chat-title-text">',
             '        <span class="ai-chat-title-name"></span>',
             '        <span class="ai-chat-title-status">Online</span>',
@@ -134,13 +133,8 @@
             '          <input type="email" id="chat-email" placeholder="you@example.com" autocomplete="email" required>',
             '        </label>',
             '        <label class="ai-chat-field">',
-            '          <span class="ai-chat-field-label">Purpose</span>',
-            '          <select id="chat-purpose" required>',
-            '            <option value="">Select Topic</option>',
-            '            <option value="Support">Support</option>',
-            '            <option value="Sales">Sales</option>',
-            '            <option value="General">General</option>',
-            '          </select>',
+            '          <span class="ai-chat-field-label">Phone Number</span>',
+            '          <input type="tel" id="chat-phone" placeholder="Phone number (optional)" autocomplete="tel" inputmode="tel">',
             '        </label>',
             '        <button type="submit">Start Chat</button>',
             '      </form>',
@@ -159,7 +153,7 @@
             '        </svg>',
             '      </button>',
             '    </div>',
-            '    <input type="text" id="ai-chat-input" placeholder="Type a message..." autocomplete="off" aria-label="Message">',
+            '    <textarea id="ai-chat-input" rows="1" placeholder="Type a message..." autocomplete="off" aria-label="Message"></textarea>',
             '    <div class="ai-chat-right-actions">',
             '      <button type="button" id="ai-chat-voice-toggle" class="icon-btn voice" title="Voice Input" aria-label="Voice input">',
             '        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">',
@@ -198,6 +192,7 @@
         var sendBtn = scope.querySelector('#ai-chat-send');
         var prechatForm = scope.querySelector('#ai-chat-user-form');
         var prechatSection = scope.querySelector('#ai-chat-prechat');
+        var inputArea = scope.querySelector('.ai-chat-input-area');
         var titleEl = windowEl.querySelector('.ai-chat-title-name');
 
         badgeIconEl.textContent = badgeIcon || 'AI';
@@ -238,13 +233,39 @@
 
         function setPrechatVisible(visible) {
             windowEl.classList.toggle('show-prechat', visible);
+            if (!prechatSection || !messagesEl || !inputArea) return;
+            if (visible) {
+                prechatSection.style.display = 'flex';
+                messagesEl.style.display = 'none';
+                inputArea.style.display = 'none';
+            } else {
+                prechatSection.style.display = 'none';
+                messagesEl.style.display = 'flex';
+                inputArea.style.display = 'flex';
+            }
+        }
+
+        function setWindowVisible(visible) {
+            if (visible) {
+                windowEl.style.display = 'flex';
+                windowEl.style.visibility = 'visible';
+                windowEl.style.opacity = '1';
+                windowEl.style.pointerEvents = 'auto';
+            } else {
+                windowEl.style.display = 'none';
+                windowEl.style.removeProperty('visibility');
+                windowEl.style.removeProperty('opacity');
+                windowEl.style.removeProperty('pointer-events');
+            }
         }
 
         function openChat() {
             chatButton.style.display = 'none';
             badge.style.display = 'none';
-            windowEl.style.display = 'flex';
+            windowEl.classList.remove('ai-chat-booting', 'active');
             setPrechatVisible(!sessionId);
+            setWindowVisible(true);
+            autoResizeInput();
             if (sessionId) {
                 inputEl.focus();
                 scrollToBottom(true);
@@ -255,7 +276,7 @@
         }
 
         function closeChat() {
-            windowEl.style.display = 'none';
+            setWindowVisible(false);
             chatButton.style.display = '';
             if (!badgeDismissed) badge.style.display = '';
             resetMinimize();
@@ -273,7 +294,15 @@
             sessionId = '';
             messagesEl.innerHTML = '';
             if (prechatForm) prechatForm.reset();
+            if (inputEl) inputEl.value = '';
+            autoResizeInput();
             setPrechatVisible(true);
+        }
+
+        function autoResizeInput() {
+            if (!inputEl) return;
+            inputEl.style.height = 'auto';
+            inputEl.style.height = inputEl.scrollHeight + 'px';
         }
 
         function addMessage(role, text, animate) {
@@ -377,6 +406,7 @@
             var text = inputEl.value.trim();
             if (!text) return;
             inputEl.value = '';
+            autoResizeInput();
             emojiPicker.classList.remove('show-picker');
             addMessage('user', text, true);
             showTyping();
@@ -428,6 +458,7 @@
                     var spacer = inputEl.value.length > 0 ? ' ' : '';
                     inputEl.value = inputEl.value + spacer + finalTranscript;
                     inputEl.focus();
+                    autoResizeInput();
                 }
             };
         }
@@ -475,18 +506,19 @@
             e.preventDefault();
             var name = scope.querySelector('#chat-name').value.trim();
             var email = scope.querySelector('#chat-email').value.trim();
-            var purpose = scope.querySelector('#chat-purpose').value;
-            if (!name || !email || !purpose) return;
+            var phone = scope.querySelector('#chat-phone').value.trim();
+            if (!name || !email) return;
 
             var submitBtn = prechatForm.querySelector('button[type="submit"]');
             submitBtn.textContent = 'Connecting...';
             submitBtn.disabled = true;
 
-            request('/session', { name: name, email: email, purpose: purpose })
+            request('/session', { name: name, email: email, phone: phone })
                 .then(function(data) {
                     sessionId = data.session_id;
                     setStoredSession(sessionId);
                     setPrechatVisible(false);
+                    autoResizeInput();
                     if (welcomeMessage) {
                         setTimeout(function() { typeMessage(welcomeMessage); }, 300);
                     }
@@ -528,16 +560,18 @@
                 e.preventDefault();
                 inputEl.value = inputEl.value + target.textContent;
                 inputEl.focus();
+                autoResizeInput();
             }
         });
 
         sendBtn.addEventListener('click', sendMessage);
         inputEl.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
+        inputEl.addEventListener('input', autoResizeInput);
 
         voiceToggle.addEventListener('click', toggleVoice);
         initVoice();

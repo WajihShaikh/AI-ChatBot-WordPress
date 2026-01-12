@@ -24,7 +24,7 @@ jQuery(document).ready(function($) {
         const meta = [];
         meta.push(buildTag('Name', button.data('name')));
         meta.push(buildTag('Email', button.data('email')));
-        meta.push(buildTag('Purpose', button.data('purpose')));
+        meta.push(buildTag('Phone', button.data('phone')));
         meta.push(buildTag('Date', button.data('date')));
         meta.push(buildTag('Session', button.data('session')));
         return meta.filter(Boolean).join('');

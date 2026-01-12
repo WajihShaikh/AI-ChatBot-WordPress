@@ -24,6 +24,7 @@ jQuery(document).ready(function($) {
     // Initialize
     restoreSession();
     initVoice();
+    autoResizeInput();
 
     // ================= EVENTS =================
 
@@ -42,25 +43,54 @@ jQuery(document).ready(function($) {
         $('#ai-chat-welcome-badge').fadeOut();
     });
 
-    // Form Submission
+  // Form Submission
     $('#ai-chat-user-form').submit(function(e) {
         e.preventDefault();
+        
+        // 1. Get Values
         const name = $('#chat-name').val().trim();
         const email = $('#chat-email').val().trim();
-        const purpose = $('#chat-purpose').val();
+        // Note: Using #chat-phone based on your PHP file
+        const phone = $('#chat-phone').val().trim(); 
+
+        // 2. Validate required fields
+        if (!name || !email) {
+            alert('Please enter your name and email.');
+            return;
+        }
+
+        // 3. Phone Validation Regex (Only Numbers 0-9)
+        const phoneRegex = /^[0-9]+$/;
+
+        if (phone && !phoneRegex.test(phone)) {
+            alert('Please enter a valid phone number (digits only, no spaces or dashes).');
+            return;
+        }
         
-        if (!name || !email || !purpose) return;
-        
+        // 4. Proceed to Save
         $(this).find('button').text('Connecting...').prop('disabled', true);
 
         $.ajax({
             url: aiChat.ajax_url,
             method: 'POST',
-            data: { action: 'ai_chat_save_user', nonce: aiChat.nonce, name: name, email: email, purpose: purpose },
+            data: { 
+                action: 'ai_chat_save_user', 
+                nonce: aiChat.nonce, 
+                name: name, 
+                email: email, 
+                phone: phone // Sending as 'phone' matching the PHP handler
+            },
             success: function(response) {
                 if (response.success) {
                     sessionId = response.data.session_id;
-                    persistSession({ session_id: sessionId, name: name, email: email, purpose: purpose });
+                    // Save to local storage
+                    persistSession({ 
+                        session_id: sessionId, 
+                        name: name, 
+                        email: email, 
+                        purpose: phone 
+                    });
+                    
                     setPrechatVisible(false);
                     $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
                     $('#ai-chat-input').trigger('focus');
@@ -70,6 +100,10 @@ jQuery(document).ready(function($) {
                      alert('Error saving user');
                      $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
                 }
+            },
+            error: function() {
+                alert('Connection error');
+                $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
             }
         });
     });
@@ -85,19 +119,14 @@ jQuery(document).ready(function($) {
         btn.attr('aria-label', isMinimized ? 'Restore chat' : 'Minimize chat');
     });
 
-    // Close Chat
-    $('.ai-chat-close-chat').click(function() {
-        if (!sessionId) {
-            resetChatUi();
-            return;
-        }
-        if(confirm('End Chat?')) {
-            resetChatUi();
+    $('#ai-chat-send').click(sendMessage);
+    $('#ai-chat-input').on('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
         }
     });
-
-    $('#ai-chat-send').click(sendMessage);
-    $('#ai-chat-input').keypress(function(e) { if(e.which === 13) sendMessage(); });
+    $('#ai-chat-input').on('input', autoResizeInput);
 
     // --- EMOJI LOGIC ---
     $('#ai-chat-emoji-toggle').click(function(e) {
@@ -118,6 +147,7 @@ jQuery(document).ready(function($) {
         if (img.length > 0) emoji = img.attr('alt'); // Grab alt text if WP made it an image
         const input = $('#ai-chat-input');
         input.val(input.val() + emoji).focus();
+        autoResizeInput();
     });
 
     $(document).click(function(e) {
@@ -140,7 +170,7 @@ jQuery(document).ready(function($) {
         recognition.onresult = function(event) {
             let finalTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-            if (finalTranscript) { const input = $('#ai-chat-input'); const spacer = input.val().length > 0 ? ' ' : ''; input.val(input.val() + spacer + finalTranscript).focus(); }
+            if (finalTranscript) { const input = $('#ai-chat-input'); const spacer = input.val().length > 0 ? ' ' : ''; input.val(input.val() + spacer + finalTranscript).focus(); autoResizeInput(); }
         };
     }
     function toggleVoice(e) {
@@ -151,6 +181,13 @@ jQuery(document).ready(function($) {
     }
 
     // Helpers
+    function autoResizeInput() {
+        const input = $('#ai-chat-input');
+        if (!input.length) return;
+        input.css('height', 'auto');
+        input.css('height', input[0].scrollHeight + 'px');
+    }
+
     function resetMinimize() {
         isMinimized = false;
         $('#ai-chat-window').removeClass('is-minimized');
@@ -162,6 +199,8 @@ jQuery(document).ready(function($) {
         $('#ai-chat-window').fadeOut();
         $('#ai-chat-messages').empty();
         $('#ai-chat-user-form')[0].reset();
+        $('#ai-chat-input').val('');
+        autoResizeInput();
         $('#ai-chat-user-form button').text('Start Chat').prop('disabled', false);
         $('#ai-chat-button').delay(300).fadeIn();
         resetMinimize();
@@ -170,30 +209,76 @@ jQuery(document).ready(function($) {
 
     function setPrechatVisible(visible) {
         $('#ai-chat-window').toggleClass('show-prechat', visible);
+        if (visible) {
+            $('#ai-chat-prechat').css('display', 'flex');
+            $('#ai-chat-messages').css('display', 'none');
+            $('.ai-chat-input-area').css('display', 'none');
+        } else {
+            $('#ai-chat-prechat').css('display', 'none');
+            $('#ai-chat-messages').css('display', 'flex');
+            $('.ai-chat-input-area').css('display', 'flex');
+            autoResizeInput();
+        }
+    }
+
+    function setBooting(booting) {
+        const windowEl = $('#ai-chat-window');
+        if (booting) {
+            windowEl.addClass('ai-chat-booting');
+            windowEl.css('visibility', 'hidden');
+        } else {
+            windowEl.removeClass('ai-chat-booting');
+            windowEl.css('visibility', '');
+        }
     }
 
     function openChatOrForm() {
         $('#ai-chat-button').fadeOut(200);
         $('#ai-chat-welcome-badge').fadeOut(200);
+        setBooting(true);
         
         const needsPrechat = !sessionId;
         setPrechatVisible(needsPrechat);
         openChatWindow(needsPrechat);
     }
 
-    function openChatWindow(focusPrechat = false) { 
-        resetMinimize();
-        $('#ai-chat-window').css('display', 'flex').hide().fadeIn(function() {
-            if (focusPrechat) {
-                $('#chat-name').trigger('focus');
-            } else {
-                $('#ai-chat-input').trigger('focus');
-            }
-        });
-        if (!focusPrechat) {
-            scrollToBottom(true);
+  // Replace the existing openChatWindow function in script.js
+function openChatWindow(focusPrechat = false) { 
+    resetMinimize();
+    const windowEl = $('#ai-chat-window');
+
+    // FIX: Make sure the window is visible
+    setBooting(false); 
+    
+    // 1. Force Flex (Override any jQuery display:block leftovers)
+    windowEl.css('display', 'flex');
+    
+    // 2. Wait 10ms for browser to render 'display:flex', then fade in
+    setTimeout(() => {
+        windowEl.addClass('active');
+        autoResizeInput();
+        
+        // 3. Handle Focus
+        if (focusPrechat) {
+            $('#chat-name').trigger('focus');
+        } else {
+            $('#ai-chat-input').trigger('focus');
         }
+    }, 10);
+
+    if (!focusPrechat) {
+        scrollToBottom(true);
     }
+}
+// Update close logic to fade out first
+$('.ai-chat-close-chat').click(function() {
+    if (!sessionId || confirm('End Chat?')) {
+        $('#ai-chat-window').removeClass('active'); // Fade out
+        setTimeout(() => {
+            resetChatUi(); // Hide display:none after fade finishes
+        }, 200);
+    }
+});
 
     function sendMessage() {
         if (isTyping) return;
@@ -205,6 +290,7 @@ jQuery(document).ready(function($) {
         const message = input.val().trim();
         if (!message) return;
         input.val('').focus();
+        autoResizeInput();
         $('#ai-chat-emoji-picker').removeClass('show-picker');
         
         addMessage('user', message);
