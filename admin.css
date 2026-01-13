@@ -382,7 +382,7 @@
 
 .ai-chat-admin-msg-user .ai-chat-admin-bubble {
     background: linear-gradient(135deg, var(--ai-admin-primary-2), var(--ai-admin-primary));
-    color: #ffffff;
+    color: #000000;
     border: none;
     box-shadow: 0 8px 18px rgba(15, 118, 110, 0.25);
 }
@@ -395,7 +395,7 @@
 }
 
 .ai-chat-admin-msg-user .ai-chat-admin-time {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgb(0 0 0 / 80%);
 }
 
 .ai-chat-admin-loading,

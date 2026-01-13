@@ -24,7 +24,7 @@ jQuery(document).ready(function($) {
         const meta = [];
         meta.push(buildTag('Name', button.data('name')));
         meta.push(buildTag('Email', button.data('email')));
-        meta.push(buildTag('Phone', button.data('phone')));
+        meta.push(buildTag('Purpose', button.data('purpose')));
         meta.push(buildTag('Date', button.data('date')));
         meta.push(buildTag('Session', button.data('session')));
         return meta.filter(Boolean).join('');
@@ -54,10 +54,14 @@ jQuery(document).ready(function($) {
                     res.data.forEach(msg => {
                         const roleClass = msg.role === 'user' ? 'ai-chat-admin-msg-user' : 'ai-chat-admin-msg-assistant';
                         const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                        
+                        // UPDATED: Use the parser function instead of just escaping
+                        const formattedMessage = parseMarkdown(msg.message);
+
                         html += `
                             <div class="ai-chat-admin-msg ${roleClass}">
                                 <div class="ai-chat-admin-bubble">
-                                    <div class="ai-chat-admin-text">${escapeHtml(msg.message)}</div>
+                                    <div class="ai-chat-admin-text">${formattedMessage}</div>
                                     ${time ? `<div class="ai-chat-admin-time">${time}</div>` : ''}
                                 </div>
                             </div>`;
@@ -106,7 +110,37 @@ jQuery(document).ready(function($) {
         if (e.key === 'Escape' && modal.is(':visible')) closeModal();
     });
     
+    // --- Helper Functions ---
+
+    // Basic sanitizer
     function escapeHtml(text) {
         return text ? String(text).replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]; }) : '';
+    }
+
+    // NEW: Markdown Parser
+    function parseMarkdown(text) {
+        if (!text) return '';
+
+        // 1. Sanitize the HTML first (Security)
+        let html = escapeHtml(text);
+
+        // 2. Convert **Bold** text
+        // Replaces **text** with <strong>text</strong>
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // 3. Convert Bullet Points
+        // Looks for a newline (or start of string) followed by * or - and a space
+        // Replaces it with a break tag and a bullet character
+        html = html.replace(/(^|\n)[ \t]*[\*\-][ \t]+/g, '<br>&bull;&nbsp;');
+
+        // 4. Convert remaining Newlines to <br>
+        html = html.replace(/\n/g, '<br>');
+        
+        // Clean up any leading <br> if it was the first line
+        if (html.startsWith('<br>')) {
+            html = html.substring(4);
+        }
+
+        return html;
     }
 });
