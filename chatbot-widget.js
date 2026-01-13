@@ -16,7 +16,7 @@
         return scripts[scripts.length - 1];
     }
 
-    function escapeHtml(text) {
+    function escapeHtmlRaw(text) {
         return String(text || '').replace(/[&<>"']/g, function(m) {
             return {
                 '&': '&amp;',
@@ -28,8 +28,84 @@
         });
     }
 
-    function formatMessageHtml(text) {
-        return escapeHtml(text).replace(/\n/g, '<br>');
+    function parseInline(text) {
+        var safe = escapeHtmlRaw(text);
+        var withBold = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        return withBold.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    }
+
+    function parseInlineStreaming(text) {
+        var out = '';
+        var bold = false;
+        var italic = false;
+        var i = 0;
+        while (i < text.length) {
+            if (text[i] === '*' && text[i + 1] === '*') {
+                bold = !bold;
+                out += bold ? '<strong>' : '</strong>';
+                i += 2;
+                continue;
+            }
+            if (text[i] === '*') {
+                italic = !italic;
+                out += italic ? '<em>' : '</em>';
+                i += 1;
+                continue;
+            }
+            out += escapeHtmlRaw(text[i]);
+            i += 1;
+        }
+        if (italic) out += '</em>';
+        if (bold) out += '</strong>';
+        return out;
+    }
+
+    function parseMarkdown(text, inlineParser) {
+        if (!text) return '';
+        var parser = inlineParser || parseInline;
+        var lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+        var blocks = [];
+        var paragraph = [];
+        var listItems = [];
+
+        function flushParagraph() {
+            if (!paragraph.length) return;
+            var content = paragraph.map(parser).join('<br>');
+            blocks.push('<p>' + content + '</p>');
+            paragraph = [];
+        }
+
+        function flushList() {
+            if (!listItems.length) return;
+            var items = listItems.map(function(item) {
+                return '<li>' + parser(item) + '</li>';
+            }).join('');
+            blocks.push('<ul>' + items + '</ul>');
+            listItems = [];
+        }
+
+        lines.forEach(function(line) {
+            if (line.trim() === '') {
+                flushParagraph();
+                return;
+            }
+            var listMatch = line.match(/^\s*[-*]\s+(.+)/);
+            if (listMatch) {
+                flushParagraph();
+                listItems.push(listMatch[1]);
+            } else {
+                flushList();
+                paragraph.push(line);
+            }
+        });
+
+        flushParagraph();
+        flushList();
+        return blocks.join('');
+    }
+
+    function parseMarkdownStreaming(text) {
+        return parseMarkdown(text, parseInlineStreaming);
     }
 
     function createElement(tag, className) {
@@ -314,7 +390,7 @@
             var msg = createElement('div', 'chat-message ' + role);
             var bubble = createElement('div', 'message-bubble');
             var textEl = createElement('div', 'message-text');
-            textEl.innerHTML = formatMessageHtml(text);
+            textEl.innerHTML = parseMarkdown(text);
             var timeEl = createElement('div', 'message-time');
             timeEl.textContent = time;
             bubble.appendChild(textEl);
@@ -336,19 +412,18 @@
             msg.appendChild(bubble);
             messagesEl.appendChild(msg);
 
+            text = text || '';
             var i = 0;
+            var buffer = '';
             function typeChar() {
                 if (i < text.length) {
-                    var ch = text.charAt(i);
-                    if (ch === '\n') {
-                        textEl.innerHTML += '<br>';
-                    } else {
-                        textEl.innerHTML += escapeHtml(ch);
-                    }
+                    buffer += text.charAt(i);
+                    textEl.innerHTML = parseMarkdownStreaming(buffer);
                     i += 1;
                     scrollToBottom(false);
                     setTimeout(typeChar, 10);
                 } else {
+                    textEl.innerHTML = parseMarkdown(text);
                     scrollToBottom(true);
                 }
             }
