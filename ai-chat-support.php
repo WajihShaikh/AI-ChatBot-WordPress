@@ -3,7 +3,7 @@
  * Plugin Name: AI Chat Support
  * Plugin URI: https://example.com
  * Description: AI-powered chatbot with Custom Context, History Fix, and Smooth Scroll.
- * Version: 1.1.6
+ * Version: 1.1.8
  * Author: Wajih Shaikh
  * Author URI: https://goaccelovate.com
  * Company: GoAccelovate
@@ -13,7 +13,7 @@
 // Prevent direct access
 if (!defined('ABSPATH')) exit;
 
-define('AI_CHAT_VERSION', '1.1.6');
+define('AI_CHAT_VERSION', '1.1.8');
 define('AI_CHAT_DB_VERSION', '1.1.4');
 define('AI_CHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_CHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -841,7 +841,11 @@ class AI_Chat_Plugin {
         </div>
 
         <button id="ai-chat-button" type="button" aria-label="Open chat">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 12a8 8 0 0 1 16 0"></path>
+                <path d="M4 12v5a2 2 0 0 0 2 2h2v-7H6a2 2 0 0 0-2 2"></path>
+                <path d="M20 12v5a2 2 0 0 1-2 2h-2v-7h2a2 2 0 0 1 2 2"></path>
+            </svg>
         </button>
 
         <div id="ai-chat-window" class="show-prechat" role="region" aria-label="AI chat" style="display:none;">
@@ -849,7 +853,6 @@ class AI_Chat_Plugin {
                 <div class="ai-chat-title">
                         <div class="ai-chat-title-text">
                             <span class="ai-chat-title-name">AI Chat Support</span>
-                            <span class="ai-chat-title-status">Online</span>
                         </div>
                 </div>
                 <div class="ai-chat-controls">

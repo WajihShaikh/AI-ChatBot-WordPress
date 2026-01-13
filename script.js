@@ -319,26 +319,30 @@ $('.ai-chat-close-chat').click(function() {
 
     function addMessage(role, text, animate = true) {
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const msgDiv = $(`<div class="chat-message ${role}"><div class="message-bubble"><div class="message-text">${escapeHtml(text)}</div><div class="message-time">${time}</div></div></div>`);
+        const msgDiv = $(`<div class="chat-message ${role}"><div class="message-bubble"><div class="message-text">${parseMarkdown(text)}</div><div class="message-time">${time}</div></div></div>`);
         $('#ai-chat-messages').append(msgDiv); 
         if(animate) scrollToBottom(true);
     }
 
     // Typing effect
     function typeMessage(text) {
+        text = text || '';
         const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         const msgDiv = $(`<div class="chat-message assistant"><div class="message-bubble"><div class="message-text typing-target"></div><div class="message-time">${time}</div></div></div>`);
         $('#ai-chat-messages').append(msgDiv);
         const target = msgDiv.find('.typing-target');
         
         let i = 0;
+        let buffer = '';
         function typeChar() { 
             if(i < text.length) { 
-                target.append(escapeHtml(text.charAt(i))); 
+                buffer += text.charAt(i);
+                target.html(parseMarkdownStreaming(buffer));
                 i++; 
                 scrollToBottom(false); 
                 setTimeout(typeChar, 10); 
             } else {
+                target.html(parseMarkdown(text));
                 scrollToBottom(true);
             }
         }
@@ -387,7 +391,7 @@ $('.ai-chat-close-chat').click(function() {
                                 $('#ai-chat-messages').empty();
                                 res.data.forEach(msg => {
                                     const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                                    const msgDiv = $(`<div class="chat-message ${msg.role}"><div class="message-bubble"><div class="message-text">${escapeHtml(msg.message)}</div><div class="message-time">${time}</div></div></div>`);
+                                    const msgDiv = $(`<div class="chat-message ${msg.role}"><div class="message-bubble"><div class="message-text">${parseMarkdown(msg.message)}</div><div class="message-time">${time}</div></div></div>`);
                                     $('#ai-chat-messages').append(msgDiv);
                                 });
                                 setTimeout(() => scrollToBottom(true), 100);
@@ -401,5 +405,81 @@ $('.ai-chat-close-chat').click(function() {
 
     function persistSession(data) { localStorage.setItem(sessionStorageKey, JSON.stringify(data)); }
     function clearStoredSession() { localStorage.removeItem(sessionStorageKey); sessionId = null; }
-    function escapeHtml(text) { return text ? String(text).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])).replace(/\n/g, '<br>') : ''; }
+    function escapeHtmlRaw(text) { return text ? String(text).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])) : ''; }
+    function escapeHtml(text) { return text ? escapeHtmlRaw(text).replace(/\n/g, '<br>') : ''; }
+    function parseInline(text) {
+        const safe = escapeHtmlRaw(text);
+        const withBold = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        return withBold.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    }
+    function parseInlineStreaming(text) {
+        let out = '';
+        let bold = false;
+        let italic = false;
+        let i = 0;
+        while (i < text.length) {
+            if (text[i] === '*' && text[i + 1] === '*') {
+                bold = !bold;
+                out += bold ? '<strong>' : '</strong>';
+                i += 2;
+                continue;
+            }
+            if (text[i] === '*') {
+                italic = !italic;
+                out += italic ? '<em>' : '</em>';
+                i += 1;
+                continue;
+            }
+            out += escapeHtmlRaw(text[i]);
+            i += 1;
+        }
+        if (italic) out += '</em>';
+        if (bold) out += '</strong>';
+        return out;
+    }
+
+    function parseMarkdown(text, inlineParser = parseInline) {
+        if (!text) return '';
+        const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
+        const blocks = [];
+        let paragraph = [];
+        let listItems = [];
+
+        function flushParagraph() {
+            if (!paragraph.length) return;
+            const content = paragraph.map(inlineParser).join('<br>');
+            blocks.push(`<p>${content}</p>`);
+            paragraph = [];
+        }
+
+        function flushList() {
+            if (!listItems.length) return;
+            const items = listItems.map(item => `<li>${inlineParser(item)}</li>`).join('');
+            blocks.push(`<ul>${items}</ul>`);
+            listItems = [];
+        }
+
+        lines.forEach(line => {
+            if (line.trim() === '') {
+                flushParagraph();
+                return;
+            }
+            const listMatch = line.match(/^\s*[-*]\s+(.+)/);
+            if (listMatch) {
+                flushParagraph();
+                listItems.push(listMatch[1]);
+            } else {
+                flushList();
+                paragraph.push(line);
+            }
+        });
+
+        flushParagraph();
+        flushList();
+        return blocks.join('');
+    }
+
+    function parseMarkdownStreaming(text) {
+        return parseMarkdown(text, parseInlineStreaming);
+    }
 });

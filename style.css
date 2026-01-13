@@ -20,6 +20,13 @@
     --ai-chat-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.12);
     --ai-chat-radius: 18px;
     --ai-chat-radius-sm: 12px;
+    --ai-chat-badge-bg: #eef0ff;
+    --ai-chat-badge-border: rgba(72, 80, 170, 0.18);
+    --ai-chat-badge-text: #2f3496;
+    --ai-chat-badge-subtext: #6c76b6;
+    --ai-chat-launcher-bg: #2f3496;
+    --ai-chat-launcher-bg-2: #3f49b6;
+    --ai-chat-launcher-shadow: 0 18px 36px rgba(47, 52, 150, 0.35);
 }
 
 /* By default, hide the pre-chat form to prevent the "blink" */
@@ -52,14 +59,13 @@
 
 /* --- 1. CHAT LAUNCHER BUTTON --- */
 #ai-chat-button {
-    position: fixed; bottom: 24px; right: 24px;
-    width: 62px; height: 62px;
-    border-radius: 18px;
+    position: fixed; bottom: 28px; right: 32px;
+    width: 46px; height: 46px;
+    border-radius: 50%;
     border: none;
-    background: radial-gradient(120% 120% at 20% 15%, #34d399 0%, var(--ai-chat-primary-2) 45%, var(--ai-chat-primary) 100%);
-    display: flex; align-items: center; justify-content: center;
+background: linear-gradient(135deg, #0ea5a0, #1d2327);    display: flex; align-items: center; justify-content: center;
     cursor: pointer;
-    box-shadow: 0 16px 30px rgba(14, 165, 160, 0.35), 0 6px 16px rgba(15, 118, 110, 0.25);
+    box-shadow: var(--ai-chat-launcher-shadow);
     z-index: 99998;
     transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
     padding: 0;
@@ -69,54 +75,42 @@
 #ai-chat-button::after {
     content: "";
     position: absolute;
-    inset: -10px;
-    border-radius: 22px;
-    background: radial-gradient(60% 60% at 50% 50%, rgba(14, 165, 160, 0.35), transparent 70%);
-    opacity: 0.6;
+    inset: -6px;
+    border-radius: 50%;
+    background: radial-gradient(60% 60% at 50% 50%, rgba(63, 73, 182, 0.35), transparent 70%);
+    opacity: 0.5;
     transform: scale(0.9);
     animation: ai-pulse 3.6s ease-in-out infinite;
     z-index: -1;
 }
-#ai-chat-button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 20px 40px rgba(14, 165, 160, 0.35); }
+#ai-chat-button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 22px 46px rgba(47, 52, 150, 0.4); }
 #ai-chat-button:active { transform: translateY(0) scale(0.98); }
-#ai-chat-button:focus-visible { outline: 3px solid rgba(249, 115, 22, 0.4); outline-offset: 2px; }
-#ai-chat-button svg { color: white; width: 26px; height: 26px; pointer-events: none; }
+#ai-chat-button:focus-visible { outline: 3px solid rgba(63, 73, 182, 0.35); outline-offset: 2px; }
+#ai-chat-button svg { color: white; width: 22px; height: 22px; pointer-events: none; fill: none; stroke: currentColor; }
 
 /* --- 2. WELCOME BADGE --- */
 #ai-chat-welcome-badge {
-    position: fixed; bottom: 30px; right: 100px;
-    background: rgba(255, 255, 255, 0.92); padding: 10px 16px; border-radius: 999px;
-    box-shadow: var(--ai-chat-shadow-soft);
+    position: fixed; bottom: 22px; right: 24px;
+    background: var(--ai-chat-badge-bg); padding: 10px 72px 10px 18px; border-radius: 999px;
+    box-shadow: 0 14px 30px rgba(47, 52, 150, 0.18);
     display: flex; align-items: center; gap: 12px;
     z-index: 99997; cursor: pointer;
-    border: 1px solid rgba(15, 118, 110, 0.12);
-    backdrop-filter: blur(12px);
+    border: 1px solid var(--ai-chat-badge-border);
+    backdrop-filter: blur(8px);
     transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    max-width: 320px;
+    max-width: 360px;
 }
-#ai-chat-welcome-badge:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16); }
-#ai-chat-welcome-badge:focus-visible { outline: 3px solid rgba(14, 165, 160, 0.3); outline-offset: 3px; }
+#ai-chat-welcome-badge:hover { transform: translateY(-2px); box-shadow: 0 18px 36px rgba(47, 52, 150, 0.22); }
+#ai-chat-welcome-badge:focus-visible { outline: 3px solid rgba(63, 73, 182, 0.3); outline-offset: 3px; }
 .welcome-badge-icon {
-    width: 36px; height: 36px;
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, rgba(14, 165, 160, 0.15), rgba(249, 115, 22, 0.2));
-    color: var(--ai-chat-primary);
-    font-size: 18px;
-    flex-shrink: 0;
+    display: none;
 }
-.welcome-badge-text { line-height: 1.2; text-align: left; }
-.welcome-badge-title { font-size: 14px; font-weight: 700; margin: 0; color: var(--ai-chat-text); }
-.welcome-badge-subtitle { font-size: 12px; margin: 0; color: var(--ai-chat-muted); }
+.welcome-badge-text { line-height: 1.2; text-align: left; display: flex; flex-direction: column; gap: 7px; }
+.welcome-badge-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--ai-chat-badge-text); }
+.welcome-badge-subtitle { font-size: 12px; margin: 0; color: var(--ai-chat-badge-subtext); }
 .welcome-badge-close {
-    width: 22px; height: 22px; background: var(--ai-chat-surface-2); border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; color: #64748b; margin-left: 6px;
-    border: none; cursor: pointer; padding: 0;
-    transition: background 0.2s ease, color 0.2s ease;
+    display: none;
 }
-.welcome-badge-close:hover { background: #e2e8f0; color: var(--ai-chat-text); }
-.welcome-badge-close:focus-visible { outline: 3px solid rgba(249, 115, 22, 0.35); outline-offset: 2px; }
 
 /* --- 3. PRE-CHAT PANEL --- */
 #ai-chat-prechat {
@@ -276,7 +270,7 @@
 
 .ai-chat-header {
     background: linear-gradient(135deg, var(--ai-chat-primary), var(--ai-chat-primary-2));
-    color: white; padding: 14px 16px;
+    color: white; padding: 19px 16px;
     display: flex; justify-content: space-between; align-items: center;
     box-sizing: border-box;
 }
@@ -331,6 +325,25 @@
 }
 
 .message-text { color: inherit; }
+.message-text p {
+    margin: 0 0 10px;
+}
+.message-text p:last-child {
+    margin-bottom: 0;
+}
+.message-text ul {
+    margin: 0 0 10px 18px;
+    padding: 0;
+}
+.message-text ul:last-child {
+    margin-bottom: 0;
+}
+.message-text li {
+    margin: 0 0 6px;
+}
+.message-text li:last-child {
+    margin-bottom: 0;
+}
 .chat-message.user .message-time {
     color: white;
 }
@@ -502,5 +515,10 @@
         grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
     }
     #ai-chat-button { bottom: 16px; right: 16px; }
-    #ai-chat-welcome-badge { right: 16px; left: 3em; bottom: 20px; width: max-content; }
+    #ai-chat-welcome-badge {
+        right: 6px;
+        bottom: 12px;
+        max-width: none;
+        padding-right: 68px;
+    }
 }
