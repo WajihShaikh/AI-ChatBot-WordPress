@@ -325,6 +325,35 @@
             }
         }
 
+        function startBadgeSequence() {
+            if (!badge || !badgeTitleEl || !badgeSubtitleEl) return;
+            var textWrap = badge.querySelector('.welcome-badge-text');
+            if (!textWrap) return;
+
+            var baseTitle = (badgeTitleEl.textContent || '').trim() || 'Welcome to AI Assistant';
+            var baseSubtitle = (badgeSubtitleEl.textContent || '').trim() || 'How can we help you?';
+            var sequence = [baseTitle, baseSubtitle, 'Feel free to ask anything!'];
+            if (sequence.length < 2) return;
+
+            var index = 0;
+            function applySequence(nextIndex) {
+                badgeTitleEl.textContent = sequence[nextIndex];
+                badgeSubtitleEl.textContent = sequence[(nextIndex + 1) % sequence.length];
+            }
+            applySequence(index);
+
+            setInterval(function() {
+                if (!badge || badge.offsetParent === null) return;
+                var nextIndex = (index + 1) % sequence.length;
+                textWrap.classList.add('is-fading');
+                setTimeout(function() {
+                    applySequence(nextIndex);
+                    textWrap.classList.remove('is-fading');
+                }, 260);
+                index = nextIndex;
+            }, 3600);
+        }
+
         function setWindowVisible(visible) {
             if (visible) {
                 windowEl.style.display = 'flex';
@@ -575,10 +604,10 @@
         });
 
         closeBtn.addEventListener('click', function() {
-            if (!sessionId || confirm('End Chat?')) {
-                resetSession();
-                closeChat();
-            }
+            isMinimized = !isMinimized;
+            windowEl.classList.toggle('is-minimized', isMinimized);
+            minimizeBtn.classList.toggle('is-minimized', isMinimized);
+            minimizeBtn.setAttribute('aria-label', isMinimized ? 'Restore chat' : 'Minimize chat');
         });
 
         prechatForm.addEventListener('submit', function(e) {
@@ -654,6 +683,7 @@
 
         voiceToggle.addEventListener('click', toggleVoice);
         initVoice();
+        startBadgeSequence();
     }
 
     onReady(init);

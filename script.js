@@ -25,6 +25,7 @@ jQuery(document).ready(function($) {
     restoreSession();
     initVoice();
     autoResizeInput();
+    startBadgeSequence();
 
     // ================= EVENTS =================
 
@@ -181,6 +182,40 @@ jQuery(document).ready(function($) {
     }
 
     // Helpers
+    function startBadgeSequence() {
+        const badge = $('#ai-chat-welcome-badge');
+        if (!badge.length) return;
+        const titleEl = badge.find('.welcome-badge-title');
+        const subtitleEl = badge.find('.welcome-badge-subtitle');
+        const textWrap = badge.find('.welcome-badge-text');
+        if (!titleEl.length || !subtitleEl.length || !textWrap.length) return;
+
+        const baseTitle = titleEl.text().trim() || 'Welcome to AI Assistant';
+        const baseSubtitle = subtitleEl.text().trim() || 'How can we help you?';
+        const sequence = [baseTitle, baseSubtitle, 'Feel free to ask anything!'];
+        if (sequence.length < 2) return;
+
+        let index = 0;
+        function applySequence(nextIndex) {
+            titleEl.text(sequence[nextIndex]);
+            subtitleEl.text(sequence[(nextIndex + 1) % sequence.length]);
+        }
+        applySequence(index);
+
+        function tick() {
+            if (!badge.is(':visible')) return;
+            const nextIndex = (index + 1) % sequence.length;
+            textWrap.addClass('is-fading');
+            setTimeout(() => {
+                applySequence(nextIndex);
+                textWrap.removeClass('is-fading');
+            }, 260);
+            index = nextIndex;
+        }
+
+        setInterval(tick, 3600);
+    }
+
     function autoResizeInput() {
         const input = $('#ai-chat-input');
         if (!input.length) return;
@@ -270,14 +305,14 @@ function openChatWindow(focusPrechat = false) {
         scrollToBottom(true);
     }
 }
-// Update close logic to fade out first
+// Close button should behave like minimize toggle
 $('.ai-chat-close-chat').click(function() {
-    if (!sessionId || confirm('End Chat?')) {
-        $('#ai-chat-window').removeClass('active'); // Fade out
-        setTimeout(() => {
-            resetChatUi(); // Hide display:none after fade finishes
-        }, 200);
-    }
+    isMinimized = !isMinimized;
+    const windowEl = $('#ai-chat-window');
+    const btn = $('.ai-chat-minimize');
+    windowEl.toggleClass('is-minimized', isMinimized);
+    btn.toggleClass('is-minimized', isMinimized);
+    btn.attr('aria-label', isMinimized ? 'Restore chat' : 'Minimize chat');
 });
 
     function sendMessage() {

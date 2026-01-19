@@ -105,7 +105,18 @@ background: linear-gradient(135deg, #0ea5a0, #1d2327);    display: flex; align-i
 .welcome-badge-icon {
     display: none;
 }
-.welcome-badge-text { line-height: 1.2; text-align: left; display: flex; flex-direction: column; gap: 7px; }
+.welcome-badge-text {
+    line-height: 1.2;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.welcome-badge-text.is-fading {
+    opacity: 0;
+    transform: translateY(6px);
+}
 .welcome-badge-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--ai-chat-badge-text); }
 .welcome-badge-subtitle { font-size: 12px; margin: 0; color: var(--ai-chat-badge-subtext); }
 .welcome-badge-close {
@@ -380,7 +391,7 @@ background: linear-gradient(135deg, #0ea5a0, #1d2327);    display: flex; align-i
 }
 #ai-chat-input {
     flex: 1; min-width: 0; border: 1px solid var(--ai-chat-border); background: #ffffff;
-    padding: 10px 14px; border-radius: 999px; font-size: 14px; color: var(--ai-chat-text);
+    padding: 10px 14px; border-radius: 19px; font-size: 14px; color: var(--ai-chat-text);
     outline: none; min-height: 42px; max-height: 140px; height: auto; line-height: 1.4; margin: 0 !important;
     resize: none; overflow-y: auto; font-family: inherit;
     transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;

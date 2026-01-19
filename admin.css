@@ -151,6 +151,7 @@
     border-right: 1px solid var(--ai-admin-border);
     border-top-right-radius: 14px;
     border-bottom-right-radius: 14px;
+    height:72px;
 }
 
 .ai-chat-table tbody tr:hover td {
@@ -375,7 +376,7 @@
     border-radius: 14px;
     font-size: 13px;
     line-height: 1.5;
-    background: #ffffff;
+    background: rgba(0,0,0,.1);
     border: 1px solid var(--ai-admin-border);
     box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
