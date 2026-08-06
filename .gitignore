@@ -1,0 +1,27 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependency and build output
+node_modules/
+vendor/
+build/
+dist/
+coverage/
+.cache/
+__pycache__/
+*.log
+*.tmp
+*.bak
+*.zip
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
